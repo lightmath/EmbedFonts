@@ -1,0 +1,139 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:WindowedApplication xmlns:fx="http://ns.adobe.com/mxml/2009"
+					   xmlns:s="library://ns.adobe.com/flex/spark"
+					   xmlns:mx="library://ns.adobe.com/flex/mx"
+					   width="500" height="400">
+	<fx:Declarations>
+		<!-- 将非可视元素（例如服务、值对象）放在此处 -->
+	</fx:Declarations>
+	
+	<fx:Script>
+		<![CDATA[
+			import com.f.utils.ProToSwf;
+			
+			import mx.controls.Alert;
+			
+			import org.flexlite.domUtils.FileUtil;
+			
+			private var dfRootUrl:String;
+			private var toolRootUrl:String;
+			private var sdkPath:String;
+			private var configPath:String;
+			private var languageArr:Array = ["cn","tw"];
+			private var wordStr:String = "";
+			
+			public function startRun(value:uint):void
+			{
+				dfRootUrl = dfRootUrlText.text;
+				sdkPath = sdkUrlText.text;
+				toolRootUrl = File.applicationDirectory.nativePath;
+				if(dfRootUrl==null || toolRootUrl==null || sdkPath==null) return;
+				
+				var toolRootUrls:Array = toolRootUrl.split("\\");
+				toolRootUrls.pop();
+				toolRootUrl = toolRootUrls.join("\\");
+				configPath = toolRootUrl+"\\src\\config\\";
+				
+				loadTxtFile();
+			}
+			
+			private function loadTxtFile():void
+			{
+				var txtFiles:Array = [(dfRootUrl+"\\Source\\Lang\\cn\\EmbedWords.txt"),(dfRootUrl+"\\Source\\Lang\\tw\\EmbedWords.txt")];
+				for each(var url:String in txtFiles)
+				{
+					var content:String = FileUtil.openAsString(url);
+					wordStr += content;
+				}
+				var fontLibrary:ProToSwf = new ProToSwf();
+				var fontLibraryUrl:String = toolRootUrl+"\\src\\config\\font\\FontLibrary.as";
+				for each(var lang:String in languageArr)
+				{
+					fontLibrary.startDealFontLibrary(fontLibraryUrl, wordStr, lang);
+				}
+				
+				//改变编译批处理命令.
+				updateComplationFile();
+				//编译字体库.
+				compileProject();
+			}
+			
+			private function updateComplationFile():void
+			{
+				var content:String = "@echo off\n"+sdkPath.charAt(0)+":\n"+"cd "+ sdkPath;
+				var sFontLibClsPath:String;
+				var fontLibStr:String;
+				for each(var lang:String in languageArr)
+				{
+					sFontLibClsPath = configPath+"font\\"+lang+"\\FontLibrary.as";
+					fontLibStr = "\nmxmlc -load-config="+ configPath +"project-config.xml " + sFontLibClsPath
+						+" -output "+dfRootUrl+"\\Source\\Lang\\"+lang+"\\Swf\\Style\\FontLib.swf";
+					content += fontLibStr;
+				}
+				FileUtil.save(configPath + "config.bat", content);
+			}
+			
+			private var np:NativeProcess;
+			private function compileProject():void
+			{
+				if (Capabilities.os.toLowerCase().indexOf("win") > -1)
+				{
+					if(NativeProcess.isSupported)
+					{
+						np = new NativeProcess();
+						var info:NativeProcessStartupInfo = new NativeProcessStartupInfo();
+						var file:File = new File("C:\\Windows\\System32\\cmd.exe");
+						info.executable = file;
+						np.addEventListener(ProgressEvent.STANDARD_OUTPUT_DATA,outComplete);
+						np.addEventListener(ProgressEvent.STANDARD_INPUT_PROGRESS, inputProgressListener);
+						np.addEventListener(NativeProcessExitEvent.EXIT, done);
+						np.addEventListener(Event.STANDARD_ERROR_CLOSE, error);
+						
+						try{
+							np.start(info);
+						}catch(e:Error){
+							Alert.show("pass:"+e.message);
+						}
+						np.standardInput.writeUTFBytes(configPath + "config.bat"+"\n");
+					}
+					else
+					{
+						trace("-app.xml文件可能没有配置正确");
+					}
+				}
+			}
+			
+			public function inputProgressListener(event:ProgressEvent):void
+			{
+				trace(event.bytesLoaded +"/"+event.bytesTotal);
+			}
+			private function done(event:NativeProcessExitEvent):void
+			{
+				trace("done");
+			}
+			private function error(event:Event):void
+			{
+				trace('error');
+			}
+			
+			//编译反馈消息.
+			private function outComplete(e:ProgressEvent):void
+			{
+				var message:String = (np.standardOutput.readMultiByte(np.standardOutput.bytesAvailable,"GBK")).toString();
+				var sFilePath:String = sdkPath.substring(0, sdkPath.length)+">";
+				if(message.indexOf(sFilePath)>-1)
+				{
+					trace("success");
+					FileUtil.deletePath(configPath + "config.bat");
+				}
+			}
+		]]>
+	</fx:Script>
+			
+			
+	<s:Label x="72" y="75" width="52" height="18" text="项目地址"/>
+	<s:TextInput id="dfRootUrlText" x="137" y="72" width="312" text="E:\workspace\DF"/>
+	<s:Label x="72" y="113" text="SDK的bin地址"/>
+	<s:TextInput id="sdkUrlText" x="72" y="128" width="377" text="D:\Program Files (x86)\Adobe Flash Builder 4.6\sdks\4.6.0\bin"/>
+	<s:Button id="startFontBtn" x="72" y="220" label="嵌入字体" click="startRun(0)"/>
+</s:WindowedApplication>

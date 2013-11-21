@@ -1,0 +1,8 @@
+.as
+.svn
+.fla
+MSYHBD.TTF
+flex-config.xml
+excludeList.txt
+.bat
+.ttf
